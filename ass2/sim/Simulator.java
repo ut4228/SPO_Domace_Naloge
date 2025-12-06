@@ -73,8 +73,7 @@ public class Simulator {
                 System.out.printf("PC = %06X%n", machine.getPC());
                 break;
             case "step":
-                machine.step();
-                printStatus();
+                performSingleStep();
                 break;
             case "run":
                 runSteps(parts);
@@ -197,6 +196,227 @@ public class Simulator {
             machine.step();
         }
         printStatus();
+    }
+
+    private void performSingleStep() {
+        int startPC = machine.getPC();
+        machine.step();
+        int length = machine.getLastInstructionLength();
+        if (length <= 0) {
+            printStatus();
+            return;
+        }
+        int[] bytes = readInstructionBytes(startPC, length);
+        String disasm = formatInstructionDescription(bytes, length, machine.getPC());
+        String byteDump = formatInstructionBytes(bytes, length);
+        System.out.printf(
+                "STEP %06X -> %06X : %s\nbytes %s \n%s%n",
+                startPC,
+                machine.getPC(),
+                disasm,
+                byteDump,
+                formatRegisterSummary());
+        printStatus();
+    }
+
+    private int[] readInstructionBytes(int startAddress, int length) {
+        int[] data = new int[length];
+        for (int i = 0; i < length; i++) {
+            int addr = maskAddress(startAddress + i);
+            data[i] = machine.getByte(addr);
+        }
+        return data;
+    }
+
+    private String formatInstructionBytes(int[] bytes, int length) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            if (i > 0) {
+                sb.append(' ');
+            }
+            sb.append(String.format("%02X", bytes[i] & 0xFF));
+        }
+        return sb.toString();
+    }
+
+    private String formatInstructionDescription(int[] bytes, int length, int nextPC) {
+        String mnemonic = machine.getLastMnemonic();
+        if (mnemonic == null) {
+            mnemonic = String.format("OP%02X", bytes[0] & 0xFF);
+        }
+        if (length == 1 || "RSUB".equals(mnemonic)) {
+            return mnemonic;
+        }
+        if (length == 2) {
+            return String.format("%s %s", mnemonic, formatFormat2Operand(machine.getLastOperand(), mnemonic));
+        }
+        return String.format("%s %s", mnemonic, formatFormat34Operand(bytes, length, nextPC));
+    }
+
+    private String formatFormat2Operand(int operand, String mnemonic) {
+        int r1 = (operand >> 4) & 0x0F;
+        int r2 = operand & 0x0F;
+        switch (mnemonic) {
+            case "CLEAR":
+            case "TIXR":
+                return registerName(r1);
+            case "SHIFTL":
+            case "SHIFTR":
+                return String.format("%s,%d", registerName(r1), r2);
+            case "SVC":
+                return String.valueOf(r1);
+            default:
+                return String.format("%s,%s", registerName(r1), registerName(r2));
+        }
+    }
+
+    private String registerName(int code) {
+        switch (code) {
+            case 0:
+                return "A";
+            case 1:
+                return "X";
+            case 2:
+                return "L";
+            case 3:
+                return "B";
+            case 4:
+                return "S";
+            case 5:
+                return "T";
+            case 6:
+                return "F";
+            case 8:
+                return "PC";
+            case 9:
+                return "SW";
+            default:
+                return "R" + code;
+        }
+    }
+
+    private String formatFormat34Operand(int[] bytes, int length, int nextPC) {
+        int first = bytes[0] & 0xFF;
+        int ni = first & 0x03;
+        boolean n = (ni & 0x02) != 0;
+        boolean i = (ni & 0x01) != 0;
+        int xbpe = (bytes[1] >> 4) & 0x0F;
+        boolean x = (xbpe & 0x08) != 0;
+        boolean b = (xbpe & 0x04) != 0;
+        boolean p = (xbpe & 0x02) != 0;
+        boolean e = length == 4;
+
+        int operandRaw;
+        if (e) {
+            operandRaw = ((bytes[1] & 0x0F) << 16) | ((bytes[2] & 0xFF) << 8) | (bytes[3] & 0xFF);
+        } else {
+            operandRaw = ((bytes[1] & 0x0F) << 8) | (bytes[2] & 0xFF);
+        }
+
+        int baseAddress;
+        if (e) {
+            baseAddress = operandRaw & 0xFFFFF;
+        } else {
+            int disp = operandRaw & 0x0FFF;
+            int signedDisp = signExtend(disp, 12);
+            if (p) {
+                baseAddress = maskAddress(nextPC + signedDisp);
+            } else if (b) {
+                baseAddress = maskAddress(machine.getB() + signedDisp);
+            } else {
+                baseAddress = disp;
+            }
+        }
+
+        if (!n && i) {
+            int value;
+            if (e || b || p) {
+                value = baseAddress;
+            } else {
+                int bits = e ? 20 : 12;
+                value = signExtend(operandRaw, bits);
+            }
+            if (value < 0) {
+                return "#" + value;
+            }
+            int width = e ? 5 : 3;
+            if (e || b || p) {
+                width = 6;
+            }
+            return String.format("#%0" + width + "X", value);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        String prefix = (n && !i) ? "@" : "";
+        sb.append(prefix).append(String.format("%06X", baseAddress));
+
+        if (x) {
+            int indexed = maskAddress(baseAddress + machine.getX());
+            sb.append(",X -> ").append(String.format("%06X", indexed));
+        }
+
+        if (n && !i) {
+            int pointer = machine.getWord(baseAddress) & 0xFFFFFF;
+            sb.append(" -> ").append(String.format("%06X", pointer));
+        }
+
+        String flags = formatAddressingFlags(x, b, p, e);
+        if (!flags.isEmpty()) {
+            sb.append(" [").append(flags).append(']');
+        }
+        return sb.toString();
+    }
+
+    private String formatAddressingFlags(boolean x, boolean b, boolean p, boolean e) {
+        StringBuilder sb = new StringBuilder();
+        if (p) {
+            sb.append("PC");
+        }
+        if (b) {
+            if (sb.length() > 0) {
+                sb.append('+');
+            }
+            sb.append("B");
+        }
+        if (e) {
+            if (sb.length() > 0) {
+                sb.append('+');
+            }
+            sb.append("EXT");
+        }
+        if (x) {
+            if (sb.length() > 0) {
+                sb.append('+');
+            }
+            sb.append("X");
+        }
+        return sb.toString();
+    }
+
+    private int maskAddress(int value) {
+        return value & Machine.MAX_ADDRESS;
+    }
+
+    private int signExtend(int value, int bits) {
+        int mask = (1 << bits) - 1;
+        value &= mask;
+        int signBit = 1 << (bits - 1);
+        if ((value & signBit) != 0) {
+            value |= ~mask;
+        }
+        return value;
+    }
+
+    private String formatRegisterSummary() {
+        return String.format(
+                "A=%06X X=%06X B=%06X L=%06X S=%06X T=%06X SW=%s",
+                machine.getA(),
+                machine.getX(),
+                machine.getB(),
+                machine.getL(),
+                machine.getS(),
+                machine.getT(),
+                interpretCondition());
     }
 
     private void setSpeed(String[] parts) {

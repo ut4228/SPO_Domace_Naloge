@@ -27,6 +27,7 @@ public class Machine {
     private double regF;
     private int regPC;
     private int regSW;
+    private int lastOpcode;
     private int lastNi;
     private int lastXbpe;
     private boolean lastExtended;
@@ -87,6 +88,18 @@ public class Machine {
 
     public void setB(int val) {
         regB = maskWord(val);
+    }
+
+    public int getLastOpcode() {
+        return lastOpcode;
+    }
+
+    public String getLastMnemonic() {
+        return opcodeToMnemonic(lastOpcode);
+    }
+
+    public boolean wasLastExtended() {
+        return lastExtended;
     }
 
     public int getS() {
@@ -434,6 +447,7 @@ public class Machine {
 
     private void executeInstruction() {
         int first = fetch();
+        lastOpcode = first & 0xFF;
         lastNi = 0;
         lastXbpe = 0;
         lastExtended = false;
@@ -460,6 +474,7 @@ public class Machine {
         }
 
         int opcode = first & 0xFC;
+        lastOpcode = opcode;
         if (!isFormat34(opcode)) {
             invalidOpcode(first);
             return;
