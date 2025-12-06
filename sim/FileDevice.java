@@ -6,20 +6,18 @@ import java.io.UncheckedIOException;
  * Device backed by a file on disk via RandomAccessFile.
  */
 public class FileDevice extends Device {
-    private final RandomAccessFile file;
+    private final String path;
+    private RandomAccessFile file;
 
     public FileDevice(String path) {
-        try {
-            this.file = new RandomAccessFile(path, "rw");
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        this.path = path;
     }
 
     @Override
     public byte read() {
+        RandomAccessFile raf = ensureFile();
         try {
-            int value = file.read();
+            int value = raf.read();
             if (value < 0) {
                 return 0;
             }
@@ -31,8 +29,9 @@ public class FileDevice extends Device {
 
     @Override
     public void write(byte value) {
+        RandomAccessFile raf = ensureFile();
         try {
-            file.writeByte(value & 0xFF);
+            raf.writeByte(value & 0xFF);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -41,5 +40,16 @@ public class FileDevice extends Device {
     @Override
     public boolean test() {
         return true;
+    }
+
+    private RandomAccessFile ensureFile() {
+        if (file == null) {
+            try {
+                file = new RandomAccessFile(path, "rw");
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+        return file;
     }
 }

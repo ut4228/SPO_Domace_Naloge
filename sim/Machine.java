@@ -32,12 +32,17 @@ public class Machine {
     private boolean lastExtended;
     private int lastOperand;
     private int lastInstructionLength;
+    private int lastLoadStart;
+    private int lastLoadLength;
 
     private Timer timer;
     private volatile boolean running;
     private int speedKHz = 1;
 
     private static final long TIMER_PERIOD_MS = 1L;
+    private static final int CC_LESS = 0x00;
+    private static final int CC_EQUAL = 0x40;
+    private static final int CC_GREATER = 0x80;
 
     public Machine() {
         initialiseDevices();
@@ -284,6 +289,8 @@ public class Machine {
 
                         startAddress = parseHex(startHex, "header start address");
                         programLength = parseHex(lengthHex, "program length");
+                        lastLoadStart = startAddress;
+                        lastLoadLength = programLength;
                         if (programLength > 0) {
                             try {
                                 checkAddressRange(startAddress, programLength);
@@ -387,6 +394,19 @@ public class Machine {
         return true;
     }
 
+    public int getLastLoadStart() {
+        return lastLoadStart;
+    }
+
+    public int getLastLoadLength() {
+        return lastLoadLength;
+    }
+
+    public void clearLoadInfo() {
+        lastLoadStart = 0;
+        lastLoadLength = 0;
+    }
+
     public void notImplemented(String mnemonic) {
         System.err.println("Instruction not implemented: " + mnemonic);
     }
@@ -449,26 +469,26 @@ public class Machine {
         int xbpe = (second >> 4) & 0x0F;
         int third = fetch();
         boolean extended = (xbpe & 0x1) != 0;
-        int operand;
+        int operandRaw;
+        int operandValue;
 
         if (extended) {
             int fourth = fetch();
-            operand = ((second & 0x0F) << 16) | (third << 8) | fourth;
+            operandRaw = ((second & 0x0F) << 16) | (third << 8) | fourth;
+            operandValue = signExtend(operandRaw, 20);
             lastInstructionLength = 4;
         } else {
-            operand = ((second & 0x0F) << 8) | third;
-            if ((operand & 0x800) != 0) {
-                operand |= 0xFFFFF000;
-            }
+            operandRaw = ((second & 0x0F) << 8) | third;
+            operandValue = signExtend(operandRaw, 12);
             lastInstructionLength = 3;
         }
 
         lastNi = first & 0x03;
         lastXbpe = xbpe;
         lastExtended = extended;
-        lastOperand = operand;
+        lastOperand = operandValue;
 
-        boolean handled = execSICF3F4(opcode, lastNi, operand);
+        boolean handled = execSICF3F4(opcode, lastNi, operandRaw);
         if (!handled) {
             notImplemented(opcodeToMnemonic(opcode));
         }
@@ -479,11 +499,452 @@ public class Machine {
     }
 
     public boolean execF2(int opcode, int operand) {
-        return false;
+        int r1 = (operand >> 4) & 0x0F;
+        int r2 = operand & 0x0F;
+
+        switch (opcode & 0xFF) {
+            case Opcode.ADDR: {
+                if (!validateGeneralRegister(r1) || !validateGeneralRegister(r2)) {
+                    invalidAddressing();
+                    return true;
+                }
+                int addResult = toSigned24(getReg(r1)) + toSigned24(getReg(r2));
+                setReg(r2, addResult);
+                return true;
+            }
+            case Opcode.SUBR: {
+                if (!validateGeneralRegister(r1) || !validateGeneralRegister(r2)) {
+                    invalidAddressing();
+                    return true;
+                }
+                int diff = toSigned24(getReg(r2)) - toSigned24(getReg(r1));
+                setReg(r2, diff);
+                return true;
+            }
+            case Opcode.MULR: {
+                if (!validateGeneralRegister(r1) || !validateGeneralRegister(r2)) {
+                    invalidAddressing();
+                    return true;
+                }
+                long product = (long) toSigned24(getReg(r1)) * toSigned24(getReg(r2));
+                setReg(r2, (int) product);
+                return true;
+            }
+            case Opcode.DIVR: {
+                if (!validateGeneralRegister(r1) || !validateGeneralRegister(r2)) {
+                    invalidAddressing();
+                    return true;
+                }
+                int divisor = toSigned24(getReg(r1));
+                if (divisor == 0) {
+                    System.err.println("Division by zero in DIVR instruction.");
+                    return true;
+                }
+                int quotient = toSigned24(getReg(r2)) / divisor;
+                setReg(r2, quotient);
+                return true;
+            }
+            case Opcode.COMPR: {
+                if (!validateGeneralRegister(r1) || !validateGeneralRegister(r2)) {
+                    invalidAddressing();
+                    return true;
+                }
+                int comparison = Integer.compare(toSigned24(getReg(r1)), toSigned24(getReg(r2)));
+                setConditionFromComparison(comparison);
+                return true;
+            }
+            case Opcode.RMO: {
+                if (!validateGeneralRegister(r1) || !validateGeneralRegister(r2)) {
+                    invalidAddressing();
+                    return true;
+                }
+                setReg(r2, getReg(r1));
+                return true;
+            }
+            case Opcode.SHIFTL: {
+                if (!validateGeneralRegister(r1)) {
+                    invalidAddressing();
+                    return true;
+                }
+                int count = r2 & 0x0F;
+                int value = getReg(r1) & 0xFFFFFF;
+                int shifted = maskWord(count >= 24 ? 0 : (value << count));
+                setReg(r1, shifted);
+                return true;
+            }
+            case Opcode.SHIFTR: {
+                if (!validateGeneralRegister(r1)) {
+                    invalidAddressing();
+                    return true;
+                }
+                int count = r2 & 0x0F;
+                int value = getReg(r1) & 0xFFFFFF;
+                int shifted = count >= 24 ? 0 : (value >>> count);
+                setReg(r1, shifted);
+                return true;
+            }
+            case Opcode.CLEAR: {
+                if (!validateGeneralRegister(r1)) {
+                    invalidAddressing();
+                    return true;
+                }
+                setReg(r1, 0);
+                return true;
+            }
+            case Opcode.TIXR: {
+                if (!validateGeneralRegister(r1)) {
+                    invalidAddressing();
+                    return true;
+                }
+                setX(maskWord(getX() + 1));
+                int comparison = Integer.compare(toSigned24(getX()), toSigned24(getReg(r1)));
+                setConditionFromComparison(comparison);
+                return true;
+            }
+            case Opcode.SVC:
+                return false;
+            default:
+                return false;
+        }
     }
 
-    public boolean execSICF3F4(int opcode, int ni, int operand) {
-        return false;
+    private boolean unconditionalJump(EffectiveAddress operand) {
+        if (operand.immediate) {
+            invalidAddressing();
+            return true;
+        }
+        setPC(operand.address);
+        return true;
+    }
+
+    private boolean conditionalJump(EffectiveAddress operand, boolean shouldJump) {
+        if (operand.immediate) {
+            invalidAddressing();
+            return true;
+        }
+        if (shouldJump) {
+            setPC(operand.address);
+        }
+        return true;
+    }
+
+    private boolean storeWordOperand(EffectiveAddress operand, int value) {
+        if (operand.immediate) {
+            invalidAddressing();
+            return true;
+        }
+        setWord(operand.address, value);
+        return true;
+    }
+
+    private boolean executeReadDevice(EffectiveAddress operand) {
+        int deviceNum = fetchDeviceNumber(operand);
+        Device device;
+        try {
+            device = getDevice(deviceNum);
+        } catch (IllegalArgumentException ex) {
+            invalidAddressing();
+            return true;
+        }
+        if (device == null) {
+            System.err.println("Device not configured: " + deviceNum);
+            return true;
+        }
+        byte data = device.read();
+        setA((getA() & 0xFFFF00) | (data & 0xFF));
+        return true;
+    }
+
+    private boolean executeWriteDevice(EffectiveAddress operand) {
+        int deviceNum = fetchDeviceNumber(operand);
+        Device device;
+        try {
+            device = getDevice(deviceNum);
+        } catch (IllegalArgumentException ex) {
+            invalidAddressing();
+            return true;
+        }
+        if (device == null) {
+            System.err.println("Device not configured: " + deviceNum);
+            return true;
+        }
+        device.write((byte) (getA() & 0xFF));
+        return true;
+    }
+
+    private boolean executeTestDevice(EffectiveAddress operand) {
+        int deviceNum = fetchDeviceNumber(operand);
+        Device device;
+        try {
+            device = getDevice(deviceNum);
+        } catch (IllegalArgumentException ex) {
+            invalidAddressing();
+            return true;
+        }
+        boolean ready = device != null && device.test();
+        setSW(ready ? CC_EQUAL : CC_LESS);
+        return true;
+    }
+
+    private int fetchDeviceNumber(EffectiveAddress operand) {
+        return readByteValue(operand) & 0xFF;
+    }
+
+    private int readWordValue(EffectiveAddress operand) {
+        if (operand.immediate) {
+            return maskWord(operand.value);
+        }
+        return getWord(operand.address);
+    }
+
+    private int readSignedWordValue(EffectiveAddress operand) {
+        return toSigned24(readWordValue(operand));
+    }
+
+    private int readByteValue(EffectiveAddress operand) {
+        if (operand.immediate) {
+            return operand.value & 0xFF;
+        }
+        return getByte(operand.address);
+    }
+
+    private EffectiveAddress resolveOperand(int ni, int xbpe, int operandRaw, boolean extended) {
+        boolean n = (ni & 0x02) != 0;
+        boolean i = (ni & 0x01) != 0;
+        if (!n && !i) {
+            throw new IllegalArgumentException("Invalid addressing mode flags");
+        }
+
+        boolean x = (xbpe & 0x08) != 0;
+        boolean b = (xbpe & 0x04) != 0;
+        boolean p = (xbpe & 0x02) != 0;
+
+        int baseAddress;
+        if (extended) {
+            baseAddress = operandRaw & 0xFFFFF;
+        } else {
+            int disp = operandRaw & 0x0FFF;
+            int signedDisp = signExtend(disp, 12);
+            if (p) {
+                baseAddress = maskAddress(getPC() + signedDisp);
+            } else if (b) {
+                baseAddress = maskAddress(getB() + signedDisp);
+            } else {
+                baseAddress = disp;
+            }
+        }
+
+        if (x) {
+            baseAddress = maskAddress(baseAddress + getX());
+        }
+
+        if (!n && i) {
+            int value;
+            if (extended || b || p) {
+                value = baseAddress;
+            } else {
+                int bits = extended ? 20 : 12;
+                value = signExtend(operandRaw, bits);
+            }
+            return EffectiveAddress.immediate(value);
+        }
+
+        int address = maskAddress(baseAddress);
+        if (n && !i) {
+            int pointer = getWord(address);
+            address = maskAddress(pointer);
+        }
+        return EffectiveAddress.direct(address);
+    }
+
+    private void setConditionFromComparison(int comparison) {
+        if (comparison < 0) {
+            setSW(CC_LESS);
+        } else if (comparison > 0) {
+            setSW(CC_GREATER);
+        } else {
+            setSW(CC_EQUAL);
+        }
+    }
+
+    private int getConditionCode() {
+        return getSW() & 0xC0;
+    }
+
+    private boolean validateGeneralRegister(int reg) {
+        return reg >= 0 && reg <= 5;
+    }
+
+    private static int toSigned24(int value) {
+        int masked = value & 0xFFFFFF;
+        if ((masked & 0x800000) != 0) {
+            masked -= 1 << 24;
+        }
+        return masked;
+    }
+
+    private static int signExtend(int value, int bits) {
+        int mask = (1 << bits) - 1;
+        value &= mask;
+        int signBit = 1 << (bits - 1);
+        if ((value & signBit) != 0) {
+            value |= ~mask;
+        }
+        return value;
+    }
+
+    private static final class EffectiveAddress {
+        final boolean immediate;
+        final int value;
+        final int address;
+
+        private EffectiveAddress(boolean immediate, int value, int address) {
+            this.immediate = immediate;
+            this.value = value;
+            this.address = address;
+        }
+
+        static EffectiveAddress immediate(int value) {
+            return new EffectiveAddress(true, value, -1);
+        }
+
+        static EffectiveAddress direct(int address) {
+            return new EffectiveAddress(false, 0, address);
+        }
+    }
+
+    public boolean execSICF3F4(int opcode, int ni, int operandRaw) {
+        if (opcode == Opcode.RSUB) {
+            setPC(getL());
+            return true;
+        }
+
+        EffectiveAddress operand;
+        try {
+            operand = resolveOperand(ni, lastXbpe, operandRaw, lastExtended);
+        } catch (IllegalArgumentException ex) {
+            invalidAddressing();
+            return true;
+        }
+
+        switch (opcode & 0xFC) {
+            case Opcode.LDA:
+                setA(readWordValue(operand));
+                return true;
+            case Opcode.LDX:
+                setX(readWordValue(operand));
+                return true;
+            case Opcode.LDL:
+                setL(readWordValue(operand));
+                return true;
+            case Opcode.STA:
+                return storeWordOperand(operand, getA());
+            case Opcode.STX:
+                return storeWordOperand(operand, getX());
+            case Opcode.STL:
+                return storeWordOperand(operand, getL());
+            case Opcode.ADD: {
+                int result = toSigned24(getA()) + readSignedWordValue(operand);
+                setA(result);
+                return true;
+            }
+            case Opcode.SUB: {
+                int result = toSigned24(getA()) - readSignedWordValue(operand);
+                setA(result);
+                return true;
+            }
+            case Opcode.MUL: {
+                long product = (long) toSigned24(getA()) * readSignedWordValue(operand);
+                setA((int) product);
+                return true;
+            }
+            case Opcode.DIV: {
+                int divisor = readSignedWordValue(operand);
+                if (divisor == 0) {
+                    System.err.println("Division by zero in DIV instruction.");
+                    return true;
+                }
+                int quotient = toSigned24(getA()) / divisor;
+                setA(quotient);
+                return true;
+            }
+            case Opcode.COMP: {
+                int comparison = Integer.compare(toSigned24(getA()), readSignedWordValue(operand));
+                setConditionFromComparison(comparison);
+                return true;
+            }
+            case Opcode.TIX: {
+                setX(maskWord(getX() + 1));
+                int comparison = Integer.compare(toSigned24(getX()), readSignedWordValue(operand));
+                setConditionFromComparison(comparison);
+                return true;
+            }
+            case Opcode.JEQ:
+                return conditionalJump(operand, getConditionCode() == CC_EQUAL);
+            case Opcode.JGT:
+                return conditionalJump(operand, getConditionCode() == CC_GREATER);
+            case Opcode.JLT:
+                return conditionalJump(operand, getConditionCode() == CC_LESS);
+            case Opcode.J:
+                return unconditionalJump(operand);
+            case Opcode.AND: {
+                int result = getA() & readWordValue(operand);
+                setA(result);
+                return true;
+            }
+            case Opcode.OR: {
+                int result = getA() | readWordValue(operand);
+                setA(result);
+                return true;
+            }
+            case Opcode.JSUB: {
+                if (operand.immediate) {
+                    invalidAddressing();
+                    return true;
+                }
+                setL(getPC());
+                setPC(operand.address);
+                return true;
+            }
+            case Opcode.LDCH: {
+                int value = readByteValue(operand);
+                setA((getA() & 0xFFFF00) | (value & 0xFF));
+                return true;
+            }
+            case Opcode.STCH: {
+                if (operand.immediate) {
+                    invalidAddressing();
+                    return true;
+                }
+                setByte(operand.address, getA() & 0xFF);
+                return true;
+            }
+            case Opcode.LDB:
+                setB(readWordValue(operand));
+                return true;
+            case Opcode.LDS:
+                setS(readWordValue(operand));
+                return true;
+            case Opcode.LDT:
+                setT(readWordValue(operand));
+                return true;
+            case Opcode.STB:
+                return storeWordOperand(operand, getB());
+            case Opcode.STS:
+                return storeWordOperand(operand, getS());
+            case Opcode.STT:
+                return storeWordOperand(operand, getT());
+            case Opcode.RD:
+                return executeReadDevice(operand);
+            case Opcode.WD:
+                return executeWriteDevice(operand);
+            case Opcode.TD:
+                return executeTestDevice(operand);
+            case Opcode.STSW:
+                return storeWordOperand(operand, getSW());
+            default:
+                return false;
+        }
     }
 
     public void start() {
@@ -528,6 +989,10 @@ public class Machine {
             throw new IllegalArgumentException("Speed must be positive.");
         }
         speedKHz = kHz;
+    }
+
+    public void step() {
+        execute();
     }
 
     private void runScheduledStep() {

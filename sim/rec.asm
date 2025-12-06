@@ -98,6 +98,8 @@ spop	STA stkA
 	
 stkp	WORD 0
 stkA	WORD 0
+stk	RESW 1000
+
 TEN     WORD  10
 pd_orig     WORD  0
 pd_quot   WORD  0
@@ -106,7 +108,5 @@ saveA    WORD  0
 
 ZERO	WORD 0
 STDIN	BYTE X'0A'
-
-stk	RESW 1000
 
         END rec
