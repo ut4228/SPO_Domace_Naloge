@@ -1,54 +1,45 @@
-import java.io.RandomAccessFile;
 import java.io.IOException;
-import java.io.FileNotFoundException;
+import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 
+/**
+ * Device backed by a file on disk via RandomAccessFile.
+ */
 public class FileDevice extends Device {
-    private RandomAccessFile file;
+    private final RandomAccessFile file;
 
-    public FileDevice(int num, String filename) {
-        super(num);
+    public FileDevice(String path) {
         try {
-            this.file = new RandomAccessFile(filename, "rw");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException("Cannot open file: " + filename, e);
-        }
-    }
-
-    @Override
-    boolean test() {
-        try {
-            return file != null && file.getFilePointer() >= 0;
+            this.file = new RandomAccessFile(path, "rw");
         } catch (IOException e) {
-            return false;
+            throw new UncheckedIOException(e);
         }
     }
 
     @Override
-    int read() {
+    public byte read() {
         try {
             int value = file.read();
-            return value == -1 ? 0 : value;
+            if (value < 0) {
+                return 0;
+            }
+            return (byte) value;
         } catch (IOException e) {
-            return 0;
+            throw new UncheckedIOException(e);
         }
     }
 
     @Override
-    void write(int val) {
+    public void write(byte value) {
         try {
-            file.write(val & 0xFF);
+            file.writeByte(value & 0xFF);
         } catch (IOException e) {
-            // Ignoriramo napako
+            throw new UncheckedIOException(e);
         }
     }
 
-    public void close() {
-        try {
-            if (file != null) {
-                file.close();
-            }
-        } catch (IOException e) {
-            // Ignoriramo napako
-        }
+    @Override
+    public boolean test() {
+        return true;
     }
 }

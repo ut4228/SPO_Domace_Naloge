@@ -1,19 +1,16 @@
-﻿public class Device {
-    int num;
-
-    public Device(int num) {
-        this.num = num;
-    }
-
-    boolean test() {
+/**
+ * Basic abstraction of an I/O device in the SIC/XE simulator.
+ */
+public class Device {
+    public boolean test() {
         return true;
     }
 
-    int read() {
+    public byte read() {
         return 0;
     }
 
-    void write(int val) {
-        // Ne naredi ničesar
+    public void write(byte value) {
+        // no-op by default
     }
 }
