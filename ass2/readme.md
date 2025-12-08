@@ -39,12 +39,9 @@ Without arguments the simulator starts at an empty machine state. When a path to
 - `run [n]` – execute _n_ instructions (default 1)
 - `start` / `stop` – begin or halt automatic execution
 - `speed <kHz>` – set automatic execution speed
-- `mem [addr] [len]` – dump memory in bytes; falls back to the most recent range when omitted
-- `memw [addr] [count]` – dump SIC/XE words showing both hex and signed decimal
-- `vars [count]` – dump the last `count` words of the currently loaded program (data area)
-- `namevars <names...>` – label the addresses shown by the most recent `vars` dump for easier tracking
-- `label <addr> <name>` – assign a label to any absolute address; `unlabel <addr|name>` removes it and `labels` lists them all
-- `clear` – reset registers, memory, labels, and load metadata
+- `vars [count] [names...]` – dump the last `count` words of the currently loaded program (data area) and, if you provide names, show them beside each word
+- `undo` – restore the machine to the state captured before the most recent modifying command
+- `clear` – reset registers, memory, and load metadata
 - `quit` / `exit` – leave the simulator
 
 All numeric arguments accept decimal, hexadecimal (`0x` prefix), or any other format supported by `Integer.decode`.

@@ -420,6 +420,91 @@ public class Machine {
         lastLoadLength = 0;
     }
 
+    public Snapshot createSnapshot() {
+        synchronized (executionLock) {
+            return new Snapshot(
+                    Arrays.copyOf(memory, memory.length),
+                    regA,
+                    regX,
+                    regL,
+                    regB,
+                    regS,
+                    regT,
+                    regF,
+                    regPC,
+                    regSW,
+                    lastLoadStart,
+                    lastLoadLength,
+                    speedKHz);
+        }
+    }
+
+    public void restoreSnapshot(Snapshot snapshot) {
+        if (snapshot == null) {
+            return;
+        }
+        synchronized (executionLock) {
+            System.arraycopy(snapshot.memory, 0, memory, 0, memory.length);
+            regA = snapshot.regA;
+            regX = snapshot.regX;
+            regL = snapshot.regL;
+            regB = snapshot.regB;
+            regS = snapshot.regS;
+            regT = snapshot.regT;
+            regF = snapshot.regF;
+            regPC = snapshot.regPC;
+            regSW = snapshot.regSW;
+            lastLoadStart = snapshot.lastLoadStart;
+            lastLoadLength = snapshot.lastLoadLength;
+            speedKHz = snapshot.speedKHz;
+            stop();
+        }
+    }
+
+    public static final class Snapshot {
+        private final byte[] memory;
+        private final int regA;
+        private final int regX;
+        private final int regL;
+        private final int regB;
+        private final int regS;
+        private final int regT;
+        private final double regF;
+        private final int regPC;
+        private final int regSW;
+        private final int lastLoadStart;
+        private final int lastLoadLength;
+        private final int speedKHz;
+
+        private Snapshot(byte[] memory,
+                int regA,
+                int regX,
+                int regL,
+                int regB,
+                int regS,
+                int regT,
+                double regF,
+                int regPC,
+                int regSW,
+                int lastLoadStart,
+                int lastLoadLength,
+                int speedKHz) {
+            this.memory = memory;
+            this.regA = regA;
+            this.regX = regX;
+            this.regL = regL;
+            this.regB = regB;
+            this.regS = regS;
+            this.regT = regT;
+            this.regF = regF;
+            this.regPC = regPC;
+            this.regSW = regSW;
+            this.lastLoadStart = lastLoadStart;
+            this.lastLoadLength = lastLoadLength;
+            this.speedKHz = speedKHz;
+        }
+    }
+
     public void notImplemented(String mnemonic) {
         System.err.println("Instruction not implemented: " + mnemonic);
     }
@@ -1100,7 +1185,7 @@ public class Machine {
         return value & MAX_ADDRESS;
     }
 
-    private static boolean isFormat1(int opcode) {
+    public static boolean isFormat1(int opcode) {
         switch (opcode & 0xFF) {
             case Opcode.FIX:
             case Opcode.FLOAT:
@@ -1114,7 +1199,7 @@ public class Machine {
         }
     }
 
-    private static boolean isFormat2(int opcode) {
+    public static boolean isFormat2(int opcode) {
         switch (opcode & 0xFF) {
             case Opcode.ADDR:
             case Opcode.SUBR:
@@ -1133,7 +1218,7 @@ public class Machine {
         }
     }
 
-    private static boolean isFormat34(int opcode) {
+    public static boolean isFormat34(int opcode) {
         switch (opcode & 0xFF) {
             case Opcode.LDA:
             case Opcode.LDX:
@@ -1183,7 +1268,7 @@ public class Machine {
         }
     }
 
-    private static String opcodeToMnemonic(int opcode) {
+    public static String opcodeToMnemonic(int opcode) {
         switch (opcode & 0xFF) {
             case Opcode.LDA:
                 return "LDA";

@@ -1,9 +1,7 @@
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
-import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Scanner;
 
 /**
@@ -12,11 +10,9 @@ import java.util.Scanner;
 public class Simulator {
     private final Machine machine;
     private boolean quit;
-    private int lastMemStart = 0;
-    private int lastMemLength = 64;
-    private int lastWordStart = 0;
     private int lastWordCount = 8;
-    private final Map<Integer, String> labels = new LinkedHashMap<>();
+    private Machine.Snapshot undoSnapshot;
+    private String undoLabel;
 
     public Simulator() {
         this.machine = new Machine();
@@ -89,29 +85,15 @@ public class Simulator {
             case "speed":
                 setSpeed(parts);
                 break;
-            case "mem":
-                dumpMemory(parts);
-                break;
-            case "memw":
-                dumpWords(parts);
-                break;
             case "vars":
             case "memvars":
                 dumpVariableWords(parts);
                 break;
-            case "namevars":
-                nameLastVars(parts);
-                break;
-            case "label":
-                addLabel(parts);
-                break;
-            case "unlabel":
-                removeLabel(parts);
-                break;
-            case "labels":
-                listLabels();
+            case "undo":
+                undoLastChange();
                 break;
             case "clear":
+                captureUndoPoint("clear");
                 resetMachine();
                 System.out.println("Machine state cleared.");
                 break;
@@ -137,18 +119,14 @@ public class Simulator {
         System.out.println("  start             Start automatic execution");
         System.out.println("  stop              Stop automatic execution");
         System.out.println("  speed <kHz>       Set automatic execution speed");
-        System.out.println("  mem [addr] [len]  Dump memory (defaults to last range)");
-        System.out.println("  memw [addr] [n]   Dump n SIC/XE words with hex+decimal output");
         System.out.println("  vars [n]          Dump last n words of loaded program (data area)");
-        System.out.println("  namevars <names>  Assign names to the current vars range");
-        System.out.println("  label <addr> <name>   Assign a name to a specific address");
-        System.out.println("  unlabel <addr|name>   Remove a label by address or name");
-        System.out.println("  labels            List all labels");
+        System.out.println("  undo              Restore the previous machine snapshot");
         System.out.println("  clear             Reset registers and memory");
         System.out.println("  quit/exit         Exit the simulator");
     }
 
     private void loadProgram(String path) {
+        captureUndoPoint("load " + path);
         machine.stop();
         resetMachine();
         try (Reader reader = new FileReader(path)) {
@@ -166,7 +144,6 @@ public class Simulator {
         machine.stop();
         machine.clearMemory();
         machine.clearLoadInfo();
-        labels.clear();
         machine.setA(0);
         machine.setX(0);
         machine.setL(0);
@@ -192,6 +169,11 @@ public class Simulator {
             System.out.println("Step count must be positive.");
             return;
         }
+        if (machine.isRunning()) {
+            System.out.println("Stop automatic execution before running manual steps.");
+            return;
+        }
+        captureUndoPoint(steps == 1 ? "single step" : ("run " + steps + " steps"));
         for (int i = 0; i < steps; i++) {
             machine.step();
         }
@@ -199,6 +181,11 @@ public class Simulator {
     }
 
     private void performSingleStep() {
+        if (machine.isRunning()) {
+            System.out.println("Stop automatic execution before stepping manually.");
+            return;
+        }
+        captureUndoPoint("single step");
         int startPC = machine.getPC();
         machine.step();
         int length = machine.getLastInstructionLength();
@@ -240,15 +227,24 @@ public class Simulator {
     }
 
     private String formatInstructionDescription(int[] bytes, int length, int nextPC) {
-        String mnemonic = machine.getLastMnemonic();
-        if (mnemonic == null) {
-            mnemonic = String.format("OP%02X", bytes[0] & 0xFF);
+        if (length <= 0) {
+            return "";
         }
-        if (length == 1 || "RSUB".equals(mnemonic)) {
+        int opcode = bytes[0] & 0xFF;
+        if (Machine.isFormat1(opcode)) {
+            return Machine.opcodeToMnemonic(opcode);
+        }
+        if (Machine.isFormat2(opcode) && length >= 2) {
+            String mnemonic = Machine.opcodeToMnemonic(opcode);
+            return String.format("%s %s", mnemonic, formatFormat2Operand(bytes[1], mnemonic));
+        }
+        int baseOpcode = opcode & 0xFC;
+        if (!Machine.isFormat34(baseOpcode) || length < 3) {
+            return String.format("BYTE %02X", opcode);
+        }
+        String mnemonic = Machine.opcodeToMnemonic(baseOpcode);
+        if ("RSUB".equals(mnemonic)) {
             return mnemonic;
-        }
-        if (length == 2) {
-            return String.format("%s %s", mnemonic, formatFormat2Operand(machine.getLastOperand(), mnemonic));
         }
         return String.format("%s %s", mnemonic, formatFormat34Operand(bytes, length, nextPC));
     }
@@ -435,102 +431,22 @@ public class Simulator {
         }
     }
 
-    private void dumpMemory(String[] parts) {
-        int start = lastMemStart;
-        int length = lastMemLength;
-
-        if (parts.length >= 2) {
-            try {
-                start = parseNumber(parts[1]);
-            } catch (NumberFormatException ex) {
-                System.out.println("Invalid address.");
-                return;
-            }
-        }
-
-        if (parts.length >= 3) {
-            try {
-                length = parseNumber(parts[2]);
-            } catch (NumberFormatException ex) {
-                System.out.println("Invalid length.");
-                return;
-            }
-        }
-
-        if (parts.length == 1) {
-            System.out.printf("Using last memory range %06X len %d bytes.%n", start, length);
-        }
-        if (start < 0 || start > Machine.MAX_ADDRESS) {
-            System.out.println("Address out of range.");
-            return;
-        }
-        if (length <= 0) {
-            System.out.println("Length must be positive.");
-            return;
-        }
-        lastMemStart = start;
-        lastMemLength = length;
-        int end = Math.min(Machine.MAX_ADDRESS, start + length - 1);
-        for (int addr = start; addr <= end; addr += 16) {
-            System.out.printf("%06X:", addr);
-            int lineEnd = Math.min(end, addr + 15);
-            for (int current = addr; current <= lineEnd; current++) {
-                int value = machine.getByte(current);
-                System.out.printf(" %02X", value);
-            }
-            System.out.println();
-        }
-    }
-
-    private void dumpWords(String[] parts) {
-        int start = lastWordStart;
-        int count = lastWordCount;
-
-        if (parts.length >= 2) {
-            try {
-                start = parseNumber(parts[1]);
-            } catch (NumberFormatException ex) {
-                System.out.println("Invalid address.");
-                return;
-            }
-        }
-
-        if (parts.length >= 3) {
-            try {
-                count = parseNumber(parts[2]);
-            } catch (NumberFormatException ex) {
-                System.out.println("Invalid word count.");
-                return;
-            }
-        }
-
-        if (parts.length == 1) {
-            System.out.printf("Using last word range %06X count %d.%n", start, count);
-        }
-
-        if (start < 0 || start > Machine.MAX_ADDRESS) {
-            System.out.println("Address out of range.");
-            return;
-        }
-        if (count <= 0) {
-            System.out.println("Count must be positive.");
-            return;
-        }
-
-        lastWordStart = start;
-        lastWordCount = count;
-
-        printWordRange(start, count);
-    }
-
     private void dumpVariableWords(String[] parts) {
         int count = lastWordCount;
-        int nameIndex = 1;
+        int nameStartIndex = 1;
         if (parts.length >= 2) {
             Integer maybeCount = tryParseNumber(parts[1]);
             if (maybeCount != null) {
                 count = maybeCount;
-                nameIndex = 2;
+                nameStartIndex = 2;
+            }
+        }
+
+        java.util.List<String> labels = java.util.Collections.emptyList();
+        if (parts.length > nameStartIndex) {
+            labels = new java.util.ArrayList<>();
+            for (int i = nameStartIndex; i < parts.length; i++) {
+                labels.add(parts[i]);
             }
         }
 
@@ -549,14 +465,12 @@ public class Simulator {
         int totalBytes = count * 3;
         int start = (int) Math.max(loadStart, end - totalBytes);
         start = Math.max(loadStart, start);
-        lastWordStart = start;
         lastWordCount = count;
         System.out.printf("Data region (last %d words of program):%n", count);
-        assignNamesFrom(parts, nameIndex, start, count);
-        printWordRange(start, count);
+        printWordRange(start, count, labels);
     }
 
-    private void printWordRange(int start, int count) {
+    private void printWordRange(int start, int count, java.util.List<String> labels) {
         for (int i = 0; i < count; i++) {
             int addr = start + i * 3;
             if (addr > Machine.MAX_ADDRESS - 2) {
@@ -565,9 +479,9 @@ public class Simulator {
             }
             int word = machine.getWord(addr);
             int signed = toSigned24(word);
-            String label = labels.get(addr);
+            String label = (labels != null && i < labels.size()) ? labels.get(i) : null;
             if (label != null) {
-                System.out.printf("%06X: %06X (%d) [%s]\n", addr, word, signed, label);
+                System.out.printf("%06X: %06X (%d)  %s%n", addr, word, signed, label);
             } else {
                 System.out.printf("%06X: %06X (%d)\n", addr, word, signed);
             }
@@ -622,85 +536,21 @@ public class Simulator {
         }
     }
 
-    private void assignNamesFrom(String[] parts, int nameIndex, int start, int count) {
-        if (parts.length <= nameIndex) {
-            return;
-        }
-        int names = parts.length - nameIndex;
-        int assign = Math.min(names, count);
-        for (int i = 0; i < assign; i++) {
-            int addr = start + i * 3;
-            labels.put(addr, parts[nameIndex + i]);
-        }
-        if (names > count) {
-            System.out.println("Warning: extra names ignored.");
-        }
+    private void captureUndoPoint(String label) {
+        undoSnapshot = machine.createSnapshot();
+        undoLabel = label;
     }
 
-    private void nameLastVars(String[] parts) {
-        if (parts.length < 2) {
-            System.out.println("Usage: namevars <name1> [name2 ...]");
+    private void undoLastChange() {
+        if (undoSnapshot == null) {
+            System.out.println("No undo information available yet.");
             return;
         }
-        if (lastWordCount <= 0) {
-            System.out.println("Run vars first to capture a data range.");
-            return;
-        }
-        assignNamesFrom(parts, 1, lastWordStart, lastWordCount);
+        machine.restoreSnapshot(undoSnapshot);
+        System.out.printf("State restored (%s).%n", undoLabel == null ? "previous action" : undoLabel);
+        undoSnapshot = null;
+        undoLabel = null;
+        printStatus();
     }
 
-    private void addLabel(String[] parts) {
-        if (parts.length < 3) {
-            System.out.println("Usage: label <addr> <name>");
-            return;
-        }
-        int addr;
-        try {
-            addr = parseNumber(parts[1]);
-        } catch (NumberFormatException ex) {
-            System.out.println("Invalid address.");
-            return;
-        }
-        labels.put(addr, parts[2]);
-        System.out.printf("Label %s assigned to %06X.%n", parts[2], addr);
-    }
-
-    private void removeLabel(String[] parts) {
-        if (parts.length < 2) {
-            System.out.println("Usage: unlabel <addr|name>");
-            return;
-        }
-        String token = parts[1];
-        Integer addr = tryParseNumber(token);
-        if (addr != null) {
-            if (labels.remove(addr) != null) {
-                System.out.printf("Removed label at %06X.%n", addr);
-            } else {
-                System.out.println("No label defined at that address.");
-            }
-            return;
-        }
-        boolean removed = false;
-        java.util.Iterator<Map.Entry<Integer, String>> iterator = labels.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<Integer, String> entry = iterator.next();
-            if (entry.getValue().equals(token)) {
-                iterator.remove();
-                removed = true;
-            }
-        }
-        if (removed) {
-            System.out.printf("Removed label(s) named %s.%n", token);
-        } else {
-            System.out.println("No label with that name.");
-        }
-    }
-
-    private void listLabels() {
-        if (labels.isEmpty()) {
-            System.out.println("No labels defined.");
-            return;
-        }
-        labels.forEach((addr, name) -> System.out.printf("%06X -> %s%n", addr, name));
-    }
 }
