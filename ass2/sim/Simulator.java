@@ -1,6 +1,8 @@
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Locale;
 import java.util.Scanner;
 
@@ -11,8 +13,9 @@ public class Simulator {
     private final Machine machine;
     private boolean quit;
     private int lastWordCount = 8;
-    private Machine.Snapshot undoSnapshot;
-    private String undoLabel;
+    private final Deque<Machine.Snapshot> undoStack = new ArrayDeque<>();
+    private final Deque<String> undoLabels = new ArrayDeque<>();
+    private static final int MAX_UNDO_DEPTH = 10;
 
     public Simulator() {
         this.machine = new Machine();
@@ -537,19 +540,24 @@ public class Simulator {
     }
 
     private void captureUndoPoint(String label) {
-        undoSnapshot = machine.createSnapshot();
-        undoLabel = label;
+        undoStack.push(machine.createSnapshot());
+        undoLabels.push(label);
+        // Omejitev globine sklada
+        while (undoStack.size() > MAX_UNDO_DEPTH) {
+            undoStack.removeLast();
+            undoLabels.removeLast();
+        }
     }
 
     private void undoLastChange() {
-        if (undoSnapshot == null) {
+        if (undoStack.isEmpty()) {
             System.out.println("No undo information available yet.");
             return;
         }
-        machine.restoreSnapshot(undoSnapshot);
-        System.out.printf("State restored (%s).%n", undoLabel == null ? "previous action" : undoLabel);
-        undoSnapshot = null;
-        undoLabel = null;
+        Machine.Snapshot snapshot = undoStack.pop();
+        String label = undoLabels.pop();
+        machine.restoreSnapshot(snapshot);
+        System.out.printf("State restored (%s).%n", label);
         printStatus();
     }
 
