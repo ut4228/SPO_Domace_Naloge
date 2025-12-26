@@ -1,0 +1,35 @@
+0000              Directive [arith] START 0
+0000              Comment: koda
+0000 03 20 41     F3 LDA x
+0000 6B 20 3E     F3 LDB y
+0003 90 30        F2 ADDR B, A
+0006 0F 20 3C     F3 STA sum
+0008 03 20 36     F3 LDA x
+000B 6B 20 33     F3 LDB y
+000E 94 30        F2 SUBR B, A
+0011 0F 20 34     F3 STA diff
+0013 03 20 2B     F3 LDA x
+0016 6B 20 28     F3 LDB y
+0019 98 30        F2 MULR B, A
+001C 0F 20 2C     F3 STA prod
+001E 03 20 20     F3 LDA x
+0021 6B 20 1D     F3 LDB y
+0024 9C 30        F2 DIVR B, A
+0027 0F 20 24     F3 STA quot
+0029 03 20 15     F3 LDA x
+002C 6B 20 12     F3 LDB y
+002F 9C 30        F2 DIVR B, A
+0032 98 03        F2 MULR A, B
+0034 03 20 0B     F3 LDA x
+0036 94 30        F2 SUBR B, A
+0039 0F 20 15     F3 STA mod
+003B 3F 2F FD     F3 [halt] J halt
+003E              Comment: podatki
+0041 00 00 11     Storage [x] WORD 17
+0041 00 00 05     Storage [y] WORD 5
+0044              Storage [sum] RESW 1
+0047              Storage [diff] RESW 1
+004A              Storage [prod] RESW 1
+004D              Storage [quot] RESW 1
+0050              Storage [mod] RESW 1
+0053              Directive END arith

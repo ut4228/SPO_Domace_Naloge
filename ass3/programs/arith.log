@@ -1,0 +1,112 @@
+Program: arith | Start: 0x0
+  Directive [arith] START 0
+  Comment: koda
+  F3 LDA x
+  F3 LDB y
+  F2 ADDR B, A
+  F3 STA sum
+  F3 LDA x
+  F3 LDB y
+  F2 SUBR B, A
+  F3 STA diff
+  F3 LDA x
+  F3 LDB y
+  F2 MULR B, A
+  F3 STA prod
+  F3 LDA x
+  F3 LDB y
+  F2 DIVR B, A
+  F3 STA quot
+  F3 LDA x
+  F3 LDB y
+  F2 DIVR B, A
+  F2 MULR A, B
+  F3 LDA x
+  F2 SUBR B, A
+  F3 STA mod
+  F3 [halt] J halt
+  Comment: podatki
+  Storage [x] WORD 17
+  Storage [y] WORD 5
+  Storage [sum] RESW 1
+  Storage [diff] RESW 1
+  Storage [prod] RESW 1
+  Storage [quot] RESW 1
+  Storage [mod] RESW 1
+  Directive END arith
+
+Symbols:
+ARITH = 0000
+DIFF = 0047
+HALT = 003B
+MOD = 0050
+PROD = 004A
+QUOT = 004D
+SUM = 0044
+X = 0041
+Y = 0041
+
+Object file:
+Harith 000000000056
+T00000003032041
+T000000056B203E9030
+T000006030F203C
+T000008080320366B20339430
+T000011030F2034
+T0000130803202B6B20289830
+T00001C030F202C
+T00001E080320206B201D9C30
+T000027030F2024
+T000029080320156B20129C30
+T00003205980303200B
+T000036029430
+T000039030F2015
+T00003B033F2FFD
+T00004103000011
+T00004103000005
+E000000
+
+Listing:
+0000              Directive [arith] START 0
+0000              Comment: koda
+0000 03 20 41     F3 LDA x
+0000 6B 20 3E     F3 LDB y
+0003 90 30        F2 ADDR B, A
+0006 0F 20 3C     F3 STA sum
+0008 03 20 36     F3 LDA x
+000B 6B 20 33     F3 LDB y
+000E 94 30        F2 SUBR B, A
+0011 0F 20 34     F3 STA diff
+0013 03 20 2B     F3 LDA x
+0016 6B 20 28     F3 LDB y
+0019 98 30        F2 MULR B, A
+001C 0F 20 2C     F3 STA prod
+001E 03 20 20     F3 LDA x
+0021 6B 20 1D     F3 LDB y
+0024 9C 30        F2 DIVR B, A
+0027 0F 20 24     F3 STA quot
+0029 03 20 15     F3 LDA x
+002C 6B 20 12     F3 LDB y
+002F 9C 30        F2 DIVR B, A
+0032 98 03        F2 MULR A, B
+0034 03 20 0B     F3 LDA x
+0036 94 30        F2 SUBR B, A
+0039 0F 20 15     F3 STA mod
+003B 3F 2F FD     F3 [halt] J halt
+003E              Comment: podatki
+0041 00 00 11     Storage [x] WORD 17
+0041 00 00 05     Storage [y] WORD 5
+0044              Storage [sum] RESW 1
+0047              Storage [diff] RESW 1
+004A              Storage [prod] RESW 1
+004D              Storage [quot] RESW 1
+0050              Storage [mod] RESW 1
+0053              Directive END arith
+
+Raw dump:
+0000: 03 20 41 6B 20 3E 90 30 0F 20 3C 03 20 36 6B 20  | . Ak >.0. <. 6k 
+0010: 33 94 30 0F 20 34 03 20 2B 6B 20 28 98 30 0F 20  | 3.0. 4. +k (.0. 
+0020: 2C 03 20 20 6B 20 1D 9C 30 0F 20 24 03 20 15 6B  | ,.  k ..0. $. .k
+0030: 20 12 9C 30 98 03 03 20 0B 94 30 0F 20 15 3F 2F  |  ..0... ..0. .?/
+0040: FD 00 00 11 00 00 05 00 00 00 00 00 00 00 00 00  | ................
+0050: 00 00 00                                         | ...

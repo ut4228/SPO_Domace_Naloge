@@ -1,0 +1,7 @@
+0000              Directive [lit] START 0
+0000 03 20 06     F3 LDA =C'HI'
+0000 0F 20 03     F3 STA buf
+0003              Directive LTORG
+0006 48 49        Storage [C'HI'] BYTE C'HI'
+0006              Storage [buf] RESB 10
+0008              Directive END lit

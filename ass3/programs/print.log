@@ -1,0 +1,47 @@
+Program: print | Start: 0x0
+  Directive [print] START 0
+  F2 CLEAR X
+  F3 [loop] LDCH txt,X
+  F3 WD #1
+  F3 TIX #txtlen
+  F3 JLT loop
+  F3 [halt] J halt
+  Storage [txt] BYTE C'SIC/XE'
+  Storage BYTE 10
+  Directive [txtend] EQU *
+  Directive [txtlen] EQU txtend-txt
+  Directive END print
+
+Symbols:
+HALT = 000B
+LOOP = 0000
+PRINT = 0000
+TXT = 000E
+TXTEND = 0017
+TXTLEN = 0009
+
+Object file:
+Hprint 000000000019
+T00000002B410
+T0000000353A00C
+T00000212DD00012D20013B2FF53F2FFD5349432F5845
+T000011010A
+E000000
+
+Listing:
+0000              Directive [print] START 0
+0000 B4 10        F2 CLEAR X
+0000 53 A0 0C     F3 [loop] LDCH txt,X
+0002 DD 00 01     F3 WD #1
+0005 2D 20 01     F3 TIX #txtlen
+0008 3B 2F F5     F3 JLT loop
+000B 3F 2F FD     F3 [halt] J halt
+000E 53 49 43 2F 58 45 Storage [txt] BYTE C'SIC/XE'
+0011 0A           Storage BYTE 10
+0017              Directive [txtend] EQU *
+0019              Directive [txtlen] EQU txtend-txt
+0019              Directive END print
+
+Raw dump:
+0000: B4 10 53 A0 0C DD 00 01 2D 20 01 3B 2F F5 3F 2F  | ..S.....- .;/.?/
+0010: FD 53 49 43 2F 58 45 0A 00                       | .SIC/XE..

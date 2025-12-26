@@ -1,0 +1,32 @@
+Program: lit | Start: 0x0
+  Directive [lit] START 0
+  F3 LDA =C'HI'
+  F3 STA buf
+  Directive LTORG
+  Storage [C'HI'] BYTE C'HI'
+  Storage [buf] RESB 10
+  Directive END lit
+
+Symbols:
+BUF = 0006
+C'HI' = 0006
+LIT = 0000
+
+Object file:
+Hlit   000000000012
+T00000003032006
+T000000030F2003
+T000006024849
+E000000
+
+Listing:
+0000              Directive [lit] START 0
+0000 03 20 06     F3 LDA =C'HI'
+0000 0F 20 03     F3 STA buf
+0003              Directive LTORG
+0006 48 49        Storage [C'HI'] BYTE C'HI'
+0006              Storage [buf] RESB 10
+0008              Directive END lit
+
+Raw dump:
+0000: 03 20 06 0F 20 03 48 49                          | . .. .HI

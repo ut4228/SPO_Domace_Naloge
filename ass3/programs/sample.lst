@@ -1,0 +1,18 @@
+03E8              Comment: Sample SIC/XE program for AST pretty print
+03E8              Directive [COPY] START 1000
+03E8 17 20 19     F3 [FIRST] STL RETADR
+03E8 4B 10 14 0E  F4 [CLOOP] +JSUB RDREC
+03EB 03 20 15     F3 LDA LENGTH
+03EF 2B 20 15     F3 COMP ZERO
+03F2 33 20 03     F3 JEQ ENDFIL
+03F5 3F 2F F0     F3 J CLOOP
+03F8 03 20 0D     F3 [ENDFIL] LDA EOF
+03FB 0F 20 0D     F3 STA BUFFER
+03FE 4F 00 00     F3 RSUB
+0401              Storage [RETADR] RESW 1
+0404              Storage [LENGTH] RESB 1
+0407 00 00 00     Storage [ZERO] WORD 0
+0408 45 4F 46     Storage [EOF] BYTE C'EOF'
+040B              Storage [BUFFER] RESB 4096
+040E              Directive END COPY
+140E 4F 00 00     F3 [RDREC] RSUB

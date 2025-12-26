@@ -1,0 +1,217 @@
+Program: guess | Start: 0x0
+  Directive [guess] START 0
+  F3 LDA #3
+  F3 STA seed
+  [newSecret] (label)
+  F3 JSUB random
+  F3 STA secret
+  [gameLoop] (label)
+  F3 RD #0
+  F3 STA tmpChar
+  F3 LDA tmpChar
+  F3 COMP #10
+  F3 JEQ gameLoop
+  F3 LDA tmpChar
+  F3 SUB #48
+  F3 STA userNum
+  F3 LDA userNum
+  F3 COMP secret
+  F3 JEQ correct
+  F3 JLT tooLow
+  F3 JGT tooHigh
+  F3 [halt] J halt
+  F2 [tooHigh] CLEAR X
+  F3 [loop1] LDCH msgHigh,X
+  F3 WD #1
+  F3 TIX #msgHlen
+  F3 JLT loop1
+  F3 J gameLoop
+  F2 [tooLow] CLEAR X
+  F3 [loop2] LDCH msgLow,X
+  F3 WD #1
+  F3 TIX #msgLlen
+  F3 JLT loop2
+  F3 J gameLoop
+  F2 [correct] CLEAR X
+  F3 [loop3] LDCH msgWin,X
+  F3 WD #1
+  F3 TIX #msgWlen
+  F3 JLT loop3
+  F3 J newSecret
+  Comment: f: X = (seed + 7) mod 10
+  [random] (label)
+  F3 LDA seed
+  F3 ADD #7
+  [randMod] (label)
+  F3 COMP #10
+  F3 JLT randDone
+  F3 SUB #10
+  F3 J randMod
+  [randDone] (label)
+  F3 STA seed
+  F3 RSUB
+  Comment: ---------------------------
+  Storage [secret] WORD 0
+  Storage [userNum] WORD 0
+  Storage [tmpChar] WORD 0
+  Storage [seed] WORD 0
+  Comment: ---------------------------
+  Comment: SPOROČILA ZA IZPIS (ASCII)
+  Storage [msgHigh] BYTE C'Too High'
+  Storage BYTE 10
+  Directive [txtHend] EQU *
+  Directive [msgHlen] EQU txtHend-msgHigh
+  Storage [msgLow] BYTE C'Too Low'
+  Storage BYTE 10
+  Directive [txtLend] EQU *
+  Directive [msgLlen] EQU txtLend-msgLow
+  Storage [msgWin] BYTE C'Correct, you won! Now guess again...'
+  Storage BYTE 10
+  Directive [txtWend] EQU *
+  Directive [msgWlen] EQU txtWend-msgWin
+
+Symbols:
+CORRECT = 0055
+GAMELOOP = 0009
+GUESS = 0000
+HALT = 0030
+LOOP1 = 0036
+LOOP2 = 0047
+LOOP3 = 0058
+MSGHIGH = 008D
+MSGHLEN = 0008
+MSGLLEN = 0007
+MSGLOW = 0097
+MSGWIN = 00A0
+MSGWLEN = 0024
+NEWSECRET = 0003
+RANDDONE = 0078
+RANDMOD = 006C
+RANDOM = 0069
+SECRET = 0081
+SEED = 0087
+TMPCHAR = 0084
+TOOHIGH = 0033
+TOOLOW = 0044
+TXTHEND = 0095
+TXTLEND = 009E
+TXTWEND = 00C4
+USERNUM = 0081
+
+Object file:
+Hguess 0000000000C6
+T00000003010003
+T000000030F2084
+T000006034B2063
+T000006030F2078
+T00000C03D90000
+T00000C1E0F207503207229000A332FF10320691D00300F206003205D2B205A33202B
+T00002A0B3B20173720033F2FFDB410
+T0000360353A055
+T0000380EDD00012D2FCA3B2FF53F2FC5B410
+T0000470353A04E
+T0000490EDD00012D2FB83B2FF53F2FB4B410
+T0000580353A046
+T00005A0CDD00012D2FC43B2FF53F2F9D
+T0000690303201E
+T00006903190007
+T00006F0329000A
+T00006F093B20061D000A3F2FF4
+T00007B030F200C
+T00007B034F0000
+T00008103000000
+T00008109000000000000000000
+T00008D08546F6F2048696768
+T00008D010A
+T00009707546F6F204C6F77
+T000097010A
+T0000A024436F72726563742C20796F7520776F6E21204E6F7720677565737320616761696E2E2E2E
+T0000A0010A
+E000000
+
+Listing:
+0000              Directive [guess] START 0
+0000 01 00 03     F3 LDA #3
+0000 0F 20 84     F3 STA seed
+0003              [newSecret] (label)
+0006 4B 20 63     F3 JSUB random
+0006 0F 20 78     F3 STA secret
+0009              [gameLoop] (label)
+000C D9 00 00     F3 RD #0
+000C 0F 20 75     F3 STA tmpChar
+000F 03 20 72     F3 LDA tmpChar
+0012 29 00 0A     F3 COMP #10
+0015 33 2F F1     F3 JEQ gameLoop
+0018 03 20 69     F3 LDA tmpChar
+001B 1D 00 30     F3 SUB #48
+001E 0F 20 60     F3 STA userNum
+0021 03 20 5D     F3 LDA userNum
+0024 2B 20 5A     F3 COMP secret
+0027 33 20 2B     F3 JEQ correct
+002A 3B 20 17     F3 JLT tooLow
+002D 37 20 03     F3 JGT tooHigh
+0030 3F 2F FD     F3 [halt] J halt
+0033 B4 10        F2 [tooHigh] CLEAR X
+0036 53 A0 55     F3 [loop1] LDCH msgHigh,X
+0038 DD 00 01     F3 WD #1
+003B 2D 2F CA     F3 TIX #msgHlen
+003E 3B 2F F5     F3 JLT loop1
+0041 3F 2F C5     F3 J gameLoop
+0044 B4 10        F2 [tooLow] CLEAR X
+0047 53 A0 4E     F3 [loop2] LDCH msgLow,X
+0049 DD 00 01     F3 WD #1
+004C 2D 2F B8     F3 TIX #msgLlen
+004F 3B 2F F5     F3 JLT loop2
+0052 3F 2F B4     F3 J gameLoop
+0055 B4 10        F2 [correct] CLEAR X
+0058 53 A0 46     F3 [loop3] LDCH msgWin,X
+005A DD 00 01     F3 WD #1
+005D 2D 2F C4     F3 TIX #msgWlen
+0060 3B 2F F5     F3 JLT loop3
+0063 3F 2F 9D     F3 J newSecret
+0066              Comment: f: X = (seed + 7) mod 10
+0069              [random] (label)
+0069 03 20 1E     F3 LDA seed
+0069 19 00 07     F3 ADD #7
+006C              [randMod] (label)
+006F 29 00 0A     F3 COMP #10
+006F 3B 20 06     F3 JLT randDone
+0072 1D 00 0A     F3 SUB #10
+0075 3F 2F F4     F3 J randMod
+0078              [randDone] (label)
+007B 0F 20 0C     F3 STA seed
+007B 4F 00 00     F3 RSUB
+007E              Comment: ---------------------------
+0081 00 00 00     Storage [secret] WORD 0
+0081 00 00 00     Storage [userNum] WORD 0
+0084 00 00 00     Storage [tmpChar] WORD 0
+0087 00 00 00     Storage [seed] WORD 0
+008A              Comment: ---------------------------
+008D              Comment: SPOROČILA ZA IZPIS (ASCII)
+008D 54 6F 6F 20 48 69 Storage [msgHigh] BYTE C'Too High'
+008D 0A           Storage BYTE 10
+0095              Directive [txtHend] EQU *
+0097              Directive [msgHlen] EQU txtHend-msgHigh
+0097 54 6F 6F 20 4C 6F Storage [msgLow] BYTE C'Too Low'
+0097 0A           Storage BYTE 10
+009E              Directive [txtLend] EQU *
+00A0              Directive [msgLlen] EQU txtLend-msgLow
+00A0 43 6F 72 72 65 63 Storage [msgWin] BYTE C'Correct, you won! Now guess again...'
+00A0 0A           Storage BYTE 10
+00C4              Directive [txtWend] EQU *
+00C6              Directive [msgWlen] EQU txtWend-msgWin
+
+Raw dump:
+0000: 01 00 03 0F 20 84 4B 20 63 0F 20 78 D9 00 00 0F  | .... .K c. x....
+0010: 20 75 03 20 72 29 00 0A 33 2F F1 03 20 69 1D 00  |  u. r)..3/.. i..
+0020: 30 0F 20 60 03 20 5D 2B 20 5A 33 20 2B 3B 20 17  | 0. `. ]+ Z3 +; .
+0030: 37 20 03 3F 2F FD B4 10 53 A0 55 DD 00 01 2D 2F  | 7 .?/...S.U...-/
+0040: CA 3B 2F F5 3F 2F C5 B4 10 53 A0 4E DD 00 01 2D  | .;/.?/...S.N...-
+0050: 2F B8 3B 2F F5 3F 2F B4 B4 10 53 A0 46 DD 00 01  | /.;/.?/...S.F...
+0060: 2D 2F C4 3B 2F F5 3F 2F 9D 03 20 1E 19 00 07 29  | -/.;/.?/.. ....)
+0070: 00 0A 3B 20 06 1D 00 0A 3F 2F F4 0F 20 0C 4F 00  | ..; ....?/.. .O.
+0080: 00 00 00 00 00 00 00 00 00 00 00 00 00 54 6F 6F  | .............Too
+0090: 20 48 69 67 68 0A 00 54 6F 6F 20 4C 6F 77 0A 00  |  High..Too Low..
+00A0: 43 6F 72 72 65 63 74 2C 20 79 6F 75 20 77 6F 6E  | Correct, you won
+00B0: 21 20 4E 6F 77 20 67 75 65 73 73 20 61 67 61 69  | ! Now guess agai
+00C0: 6E 2E 2E 2E 0A 00                                | n.....

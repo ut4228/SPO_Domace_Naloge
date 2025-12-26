@@ -422,8 +422,20 @@ public class Machine {
 
     public Snapshot createSnapshot() {
         synchronized (executionLock) {
+            // Shrani samo spremenjene dele pomnilnika (sparse diff)
+            java.util.Map<Integer, Byte> memoryDiff = new java.util.HashMap<>();
+            
+            // Če imamo naložen program, shrani samo ta del pomnilnika
+            if (lastLoadLength > 0) {
+                int start = lastLoadStart;
+                int end = Math.min(lastLoadStart + lastLoadLength, MEMORY_SIZE);
+                for (int i = start; i < end; i++) {
+                    memoryDiff.put(i, memory[i]);
+                }
+            }
+            
             return new Snapshot(
-                    Arrays.copyOf(memory, memory.length),
+                    memoryDiff,
                     regA,
                     regX,
                     regL,
@@ -444,7 +456,11 @@ public class Machine {
             return;
         }
         synchronized (executionLock) {
-            System.arraycopy(snapshot.memory, 0, memory, 0, memory.length);
+            // Obnovi samo spremenjene naslove
+            for (java.util.Map.Entry<Integer, Byte> entry : snapshot.memoryDiff.entrySet()) {
+                memory[entry.getKey()] = entry.getValue();
+            }
+            
             regA = snapshot.regA;
             regX = snapshot.regX;
             regL = snapshot.regL;
@@ -462,7 +478,7 @@ public class Machine {
     }
 
     public static final class Snapshot {
-        private final byte[] memory;
+        private final java.util.Map<Integer, Byte> memoryDiff;
         private final int regA;
         private final int regX;
         private final int regL;
@@ -476,7 +492,7 @@ public class Machine {
         private final int lastLoadLength;
         private final int speedKHz;
 
-        private Snapshot(byte[] memory,
+        private Snapshot(java.util.Map<Integer, Byte> memoryDiff,
                 int regA,
                 int regX,
                 int regL,
@@ -489,7 +505,7 @@ public class Machine {
                 int lastLoadStart,
                 int lastLoadLength,
                 int speedKHz) {
-            this.memory = memory;
+            this.memoryDiff = memoryDiff;
             this.regA = regA;
             this.regX = regX;
             this.regL = regL;

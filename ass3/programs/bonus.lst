@@ -1,0 +1,70 @@
+0000              Directive [guess] START 0
+0000 01 00 03     F3 LDA #3
+0000 0F 20 84     F3 STA seed
+0003              [newSecret] (label)
+0006 4B 20 63     F3 JSUB random
+0006 0F 20 78     F3 STA secret
+0009              [gameLoop] (label)
+000C D9 00 00     F3 RD #0
+000C 0F 20 75     F3 STA tmpChar
+000F 03 20 72     F3 LDA tmpChar
+0012 29 00 0A     F3 COMP #10
+0015 33 2F F1     F3 JEQ gameLoop
+0018 03 20 69     F3 LDA tmpChar
+001B 1D 00 30     F3 SUB #48
+001E 0F 20 60     F3 STA userNum
+0021 03 20 5D     F3 LDA userNum
+0024 2B 20 5A     F3 COMP secret
+0027 33 20 2B     F3 JEQ correct
+002A 3B 20 17     F3 JLT tooLow
+002D 37 20 03     F3 JGT tooHigh
+0030 3F 2F FD     F3 [halt] J halt
+0033 B4 10        F2 [tooHigh] CLEAR X
+0036 53 A0 55     F3 [loop1] LDCH msgHigh,X
+0038 DD 00 01     F3 WD #1
+003B 2D 2F CA     F3 TIX #msgHlen
+003E 3B 2F F5     F3 JLT loop1
+0041 3F 2F C5     F3 J gameLoop
+0044 B4 10        F2 [tooLow] CLEAR X
+0047 53 A0 4E     F3 [loop2] LDCH msgLow,X
+0049 DD 00 01     F3 WD #1
+004C 2D 2F B8     F3 TIX #msgLlen
+004F 3B 2F F5     F3 JLT loop2
+0052 3F 2F B4     F3 J gameLoop
+0055 B4 10        F2 [correct] CLEAR X
+0058 53 A0 46     F3 [loop3] LDCH msgWin,X
+005A DD 00 01     F3 WD #1
+005D 2D 2F C4     F3 TIX #msgWlen
+0060 3B 2F F5     F3 JLT loop3
+0063 3F 2F 9D     F3 J newSecret
+0066              Comment: f: X = (seed + 7) mod 10
+0069              [random] (label)
+0069 03 20 1E     F3 LDA seed
+0069 19 00 07     F3 ADD #7
+006C              [randMod] (label)
+006F 29 00 0A     F3 COMP #10
+006F 3B 20 06     F3 JLT randDone
+0072 1D 00 0A     F3 SUB #10
+0075 3F 2F F4     F3 J randMod
+0078              [randDone] (label)
+007B 0F 20 0C     F3 STA seed
+007B 4F 00 00     F3 RSUB
+007E              Comment: ---------------------------
+0081 00 00 00     Storage [secret] WORD 0
+0081 00 00 00     Storage [userNum] WORD 0
+0084 00 00 00     Storage [tmpChar] WORD 0
+0087 00 00 00     Storage [seed] WORD 0
+008A              Comment: ---------------------------
+008D              Comment: SPOROÈILA ZA IZPIS (ASCII)
+008D 54 6F 6F 20 48 69 Storage [msgHigh] BYTE C'Too High'
+008D 0A           Storage BYTE 10
+0095              Directive [txtHend] EQU *
+0097              Directive [msgHlen] EQU txtHend-msgHigh
+0097 54 6F 6F 20 4C 6F Storage [msgLow] BYTE C'Too Low'
+0097 0A           Storage BYTE 10
+009E              Directive [txtLend] EQU *
+00A0              Directive [msgLlen] EQU txtLend-msgLow
+00A0 43 6F 72 72 65 63 Storage [msgWin] BYTE C'Correct, you won! Now guess again...'
+00A0 0A           Storage BYTE 10
+00C4              Directive [txtWend] EQU *
+00C6              Directive [msgWlen] EQU txtWend-msgWin
